@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./client.js', () => ({
   owaGet: vi.fn(),
@@ -21,7 +21,11 @@ const mPatch = vi.mocked(owaPatch);
 const mDelete = vi.mocked(owaDelete);
 const mGraphPost = vi.mocked(graphPost);
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv('MSOUTLOOK_TIMEZONE', undefined);
+});
+afterEach(() => vi.unstubAllEnvs());
 
 describe('listEvents', () => {
   it('uses calendarview and defaults', async () => {
@@ -35,6 +39,33 @@ describe('listEvents', () => {
     expect(typeof params.startDateTime).toBe('string');
     expect(typeof params.endDateTime).toBe('string');
     expect(params['$filter']).toBeUndefined();
+    expect(params['$select'].split(',')).toEqual(expect.arrayContaining(['ShowAs', 'Type', 'Categories']));
+    expect(mGet.mock.calls[0][2]).toBeUndefined();
+  });
+
+  it.each(['Tokyo Standard Time', 'Pacific Standard Time'])(
+    'requests the configured response time zone %s without changing the date window', async timeZone => {
+      vi.stubEnv('MSOUTLOOK_TIMEZONE', timeZone);
+      const events = [{
+        Id: 'e1', Start: { DateTime: '2030-01-01T09:00:00', TimeZone: timeZone },
+        ShowAs: 'Tentative', Type: 'Occurrence', Categories: ['Work'],
+      }];
+      mGet.mockResolvedValue({ value: events });
+
+      expect(await listEvents({
+        calendarId: 'work', startDateTime: '2030-01-01T00:00:00+09:00', endDateTime: '2030-01-02T00:00:00+09:00',
+      })).toEqual(events);
+      expect(mGet).toHaveBeenCalledWith('/calendars/work/calendarview', expect.objectContaining({
+        startDateTime: '2030-01-01T00:00:00+09:00', endDateTime: '2030-01-02T00:00:00+09:00',
+      }), { Prefer: `outlook.timezone="${timeZone}"` });
+    },
+  );
+
+  it.each(['', '   '])('omits the time zone preference for a blank setting (%j)', async timeZone => {
+    vi.stubEnv('MSOUTLOOK_TIMEZONE', timeZone);
+    mGet.mockResolvedValue({ value: [] });
+    await listEvents();
+    expect(mGet.mock.calls[0][2]).toBeUndefined();
   });
 
   it('uses calendar-specific path, custom dates, select and filter', async () => {

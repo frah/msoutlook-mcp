@@ -135,6 +135,8 @@ Then run `outlook_login` from your MCP client. On first use a browser opens so y
 - **Reminders.** Use `reminder_minutes_before_start` and `is_reminder_on`. Graph and Outlook support only **one** reminder per event, so you cannot set, for example, both a one-month and a one-week reminder on a single event. Mirror the same event into separate calendars if you need several lead times.
 - **Proposing a new time.** Add `proposed_new_time` with `start` and `end`, each containing `date_time` and `time_zone`. The response must be `decline` or `tentativelyAccept`, and the event must allow proposals. The Graph token needs `Calendars.ReadWrite`. The organizer updates the event after accepting the proposal.
 - **Date window.** `outlook_list_events` uses Graph's `calendarView`, so a `start_date`/`end_date` window genuinely scopes the results and recurring series are expanded into individual instances. When only `start_date` is given, the window runs a week forward from it.
+- **Calendar time zone.** Set `MSOUTLOOK_TIMEZONE` to an Outlook time zone name, such as `Tokyo Standard Time` for JST. Event lists (including search results) request that time zone from Outlook using the `Prefer: outlook.timezone="…"` header. If unset or blank, Outlook's default response time zone is used. Date window values still use the offsets supplied in `start_date` and `end_date`.
+- **Compact event lists.** Pass `compact: true` to `outlook_list_events` for a count header followed by one line per event: `start~end | subject | location | flags`. Times are shown to the minute in the response time zone. Flags include `AllDay`, `Cancelled`, `Recurring`/`Single`, `ShowAs=…`, and `Resp=…` when available. IDs, URLs, and body previews are omitted; an empty list still returns `No events found.` The default detailed view also shows all-day/cancelled markers, event type, and an explicit recurring yes/no status.
 - **Mirroring personal events.** `show_as` (`free`/`tentative`/`busy`/`oof`/`workingElsewhere`), `categories`, and `is_private` help when copying personal events into a work calendar.
 
 ### Contacts & People
@@ -205,6 +207,7 @@ Cookie import is a best effort optimisation. If it cannot run (e.g. no matching 
 | Variable | Description |
 |----------|-------------|
 | `MSOUTLOOK_DEBUG=true` | Enable debug logging to stderr |
+| `MSOUTLOOK_TIMEZONE` | Response time zone for event lists and searches (e.g. `Tokyo Standard Time` for JST). Unset or blank uses Outlook's default. |
 | `MSOUTLOOK_BROWSER=chrome` | Force a specific browser: `chrome` or `msedge`. If unset, uses the macOS system default browser; falls back to Chrome on macOS/Linux and Edge on Windows. |
 | `MSOUTLOOK_CHROME_PROFILE` | Pin a specific Chrome profile dir for cookie import (e.g. `Profile 1`). Defaults to `Default`. |
 | `MSOUTLOOK_EDGE_PROFILE` | Pin a specific Edge profile dir for cookie import (e.g. `Profile 1`). Defaults to `Default`. |

@@ -63,6 +63,22 @@ describe('owaGet', () => {
     expect(url).toBe(`${OWA_REST_V2}/me/messages?%24top=5`);
   });
 
+  it('adds request headers while preserving bearer and default headers', async () => {
+    mGetOwaToken.mockResolvedValue('tok');
+    const defaults = { Authorization: 'Bearer tok', Accept: 'application/json', Origin: OWA_BASE };
+    mGetBearerHeaders.mockReturnValue(defaults);
+    mFetchWithRetry.mockResolvedValue({} as Response);
+    mParseResponse.mockResolvedValue({ value: [] });
+
+    await owaGet('/calendarview', { '$top': '5' }, { Prefer: 'outlook.timezone="Tokyo Standard Time"' });
+
+    expect(mFetchWithRetry).toHaveBeenCalledWith(`${OWA_REST_V2}/me/calendarview?%24top=5`, {
+      method: 'GET',
+      headers: { ...defaults, Prefer: 'outlook.timezone="Tokyo Standard Time"' },
+    });
+    expect(defaults).not.toHaveProperty('Prefer');
+  });
+
   it('appends query string with & when path already has a query', async () => {
     mGetOwaToken.mockResolvedValue('tok');
     mFetchWithRetry.mockResolvedValue({} as Response);
