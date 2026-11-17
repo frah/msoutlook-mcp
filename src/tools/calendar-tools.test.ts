@@ -47,6 +47,71 @@ describe('list_events', () => {
     vi.mocked(cal.listEvents).mockResolvedValue([] as any);
     expect(text(await tools.get('outlook_list_events')!.handler({ start_date: 's', end_date: 'e', top: 5, calendar_id: 'c' }))).toBe('No events found.');
   });
+
+  it.each([
+    ['Occurrence', undefined, true],
+    ['Exception', undefined, true],
+    ['SeriesMaster', undefined, true],
+    [undefined, { Pattern: { Type: 'Daily' } }, true],
+    ['SingleInstance', undefined, false],
+    [undefined, undefined, false],
+  ])('reports recurrence consistently for Type=%s and Recurrence=%j', async (Type, Recurrence, recurring) => {
+    vi.mocked(cal.listEvents).mockResolvedValue([{ ...fullEvent, Type, Recurrence }] as any);
+
+    const detailed = text(await tools.get('outlook_list_events')!.handler({}));
+    expect(detailed).toContain(`Recurring: ${recurring ? 'yes' : 'no'}`);
+    if (Type) expect(detailed).toContain(`Type: ${Type}`);
+
+    const compact = text(await tools.get('outlook_list_events')!.handler({ compact: true }));
+    expect(compact).toContain(` | ${recurring ? 'Recurring' : 'Single'} Resp=organizer`);
+  });
+
+  it('includes status markers and categories in detailed lists', async () => {
+    vi.mocked(cal.listEvents).mockResolvedValue([{
+      ...fullEvent, IsAllDay: true, IsCancelled: true, Type: 'Exception', ShowAs: 'Oof', Categories: ['Work', 'Travel'],
+    }] as any);
+    const r = text(await tools.get('outlook_list_events')!.handler({ compact: false }));
+    expect(r).toContain('All day: yes');
+    expect(r).toContain('Cancelled: yes');
+    expect(r).toContain('Type: Exception');
+    expect(r).toContain('Show as: Oof');
+    expect(r).toContain('Categories: Work, Travel');
+    expect(r).toContain('ID: e1');
+    expect(r).toContain('Web URL: http://w');
+  });
+
+  it('formats compact lists as a header and one line per event without detail fields', async () => {
+    vi.mocked(cal.listEvents).mockResolvedValue([{
+      ...fullEvent,
+      Start: { DateTime: '2026-11-17T09:00:00.0000000', TimeZone: 'Tokyo Standard Time' },
+      End: { DateTime: '2026-11-17T10:30:00.0000000', TimeZone: 'Tokyo Standard Time' },
+      Subject: 'Team\r\nsync', Location: { DisplayName: 'Room\nA' },
+      IsAllDay: true, IsCancelled: true, Type: 'Exception', ShowAs: 'Tentative',
+      BodyPreview: 'private preview',
+    }, { ...leanEvent, IsOnlineMeeting: false }] as any);
+
+    const r = text(await tools.get('outlook_list_events')!.handler({
+      compact: true, start_date: 's', end_date: 'e', top: 5, calendar_id: 'c',
+    }));
+    expect(r).toBe([
+      '2 events (start~end | subject | location | flags)',
+      '2026-11-17T09:00~2026-11-17T10:30 | Team sync | Room A | AllDay Cancelled Recurring ShowAs=Tentative Resp=organizer',
+      'Unknown~Unknown | X |  | Single',
+    ].join('\n'));
+    expect(cal.listEvents).toHaveBeenCalledWith({ startDateTime: 's', endDateTime: 'e', top: 5, calendarId: 'c' });
+    expect(r).not.toMatch(/e1|e2|http|private preview|Preview:|Body/);
+  });
+
+  it('keeps the empty-list message in compact mode', async () => {
+    vi.mocked(cal.listEvents).mockResolvedValue([]);
+    expect(text(await tools.get('outlook_list_events')!.handler({ compact: true }))).toBe('No events found.');
+  });
+
+  it('accepts a boolean compact option in the tool schema', () => {
+    const schema = z.object(tools.get('outlook_list_events')!.schema);
+    expect(schema.safeParse({ compact: true }).success).toBe(true);
+    expect(schema.safeParse({ compact: 'true' }).success).toBe(false);
+  });
 });
 
 describe('get_event', () => {

@@ -229,7 +229,7 @@ async function waitForOwaAuth(context: BrowserContext, timeoutMs: number): Promi
     if (redirectedToLogin) return false;
 
     // No login redirect — session appears valid. Now wait for the MSAL token.
-    await page.waitForFunction(owaAccessTokenPresent, { timeout: timeoutMs });
+    await page.waitForFunction(owaAccessTokenPresent, undefined, { timeout: timeoutMs });
     return true;
   } finally {
     page.off('framenavigated', onNavigation);
@@ -369,7 +369,7 @@ export async function headedLogin(clearCookiesFirst = false): Promise<LoginResul
       // Login redirect — user needs to sign in manually; wait for them
       logger.info('Waiting for you to complete sign-in in the browser...');
       if (page) {
-        await page.waitForFunction(owaAccessTokenPresent, { timeout: LOGIN_TIMEOUT_MS });
+        await page.waitForFunction(owaAccessTokenPresent, undefined, { timeout: LOGIN_TIMEOUT_MS });
       }
     }
 

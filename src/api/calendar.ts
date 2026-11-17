@@ -41,6 +41,7 @@ export interface CalendarEvent {
   IsOnlineMeeting?: boolean;
   OnlineMeetingUrl?: string;
   Recurrence?: unknown;
+  Type?: 'SingleInstance' | 'Occurrence' | 'Exception' | 'SeriesMaster';
   Importance?: string;
   Sensitivity?: string;
   ShowAs?: string;
@@ -204,13 +205,15 @@ export async function listEvents(opts: ListEventsOptions = {}): Promise<Calendar
     '$select': (opts.select ?? [
       'Id', 'Subject', 'BodyPreview', 'Start', 'End', 'Location',
       'Organizer', 'Attendees', 'IsAllDay', 'IsCancelled', 'IsOnlineMeeting',
-      'OnlineMeetingUrl', 'ResponseStatus', 'WebLink',
+      'OnlineMeetingUrl', 'ResponseStatus', 'WebLink', 'ShowAs', 'Type', 'Categories',
     ]).join(','),
   };
 
   if (opts.filter) params['$filter'] = opts.filter;
 
-  const res = await owaGet<ODataResponse<CalendarEvent>>(path, params);
+  const timeZone = process.env.MSOUTLOOK_TIMEZONE?.trim();
+  const headers = timeZone ? { Prefer: `outlook.timezone="${timeZone}"` } : undefined;
+  const res = await owaGet<ODataResponse<CalendarEvent>>(path, params, headers);
   return res.value;
 }
 

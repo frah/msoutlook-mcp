@@ -82,6 +82,28 @@ function toRecurrenceInput(r: RecurrenceArg): RecurrenceInput {
 // Formatters
 // ─────────────────────────────────────────────────────────────────────────────
 
+function isRecurringEvent(e: CalendarEvent): boolean {
+  // calendarView expands series into instances, which may omit Recurrence.
+  return Boolean(e.Recurrence) || e.Type === 'Occurrence' || e.Type === 'Exception' || e.Type === 'SeriesMaster';
+}
+
+function formatCompactEvent(e: CalendarEvent): string {
+  const start = e.Start?.DateTime?.slice(0, 16) ?? 'Unknown';
+  const end = e.End?.DateTime?.slice(0, 16) ?? 'Unknown';
+  const flags = [
+    e.IsAllDay ? 'AllDay' : '',
+    e.IsCancelled ? 'Cancelled' : '',
+    isRecurringEvent(e) ? 'Recurring' : 'Single',
+    e.ShowAs ? `ShowAs=${e.ShowAs}` : '',
+    e.ResponseStatus?.Response ? `Resp=${e.ResponseStatus.Response}` : '',
+  ].filter(Boolean).join(' ');
+
+  // Subjects and locations can contain line breaks; keep each event on one line.
+  return [`${start}~${end}`, e.Subject, e.Location?.DisplayName ?? '', flags]
+    .map(value => value.replace(/[\r\n\u2028\u2029]+/g, ' '))
+    .join(' | ');
+}
+
 function formatEvent(e: CalendarEvent, full = false): string {
   const start = e.Start?.DateTime ?? 'Unknown';
   const end = e.End?.DateTime ?? 'Unknown';
@@ -99,7 +121,10 @@ function formatEvent(e: CalendarEvent, full = false): string {
     organizer ? `Organizer: ${organizer}` : '',
     attendeeCount > 0 ? `Attendees: ${attendeeCount}` : '',
     e.IsOnlineMeeting ? `Online Meeting: ${e.OnlineMeetingUrl ?? 'Yes'}` : '',
-    e.Recurrence ? 'Recurring: yes' : '',
+    e.IsAllDay ? 'All day: yes' : '',
+    e.IsCancelled ? 'Cancelled: yes' : '',
+    e.Type ? `Type: ${e.Type}` : '',
+    `Recurring: ${isRecurringEvent(e) ? 'yes' : 'no'}`,
     e.IsReminderOn ? `Reminder: ${e.ReminderMinutesBeforeStart ?? 0} min before` : '',
     e.ShowAs ? `Show as: ${e.ShowAs}` : '',
     e.Categories?.length ? `Categories: ${e.Categories.join(', ')}` : '',
@@ -124,8 +149,11 @@ function formatEvent(e: CalendarEvent, full = false): string {
   return lines.join('\n');
 }
 
-function formatEventList(events: CalendarEvent[]): string {
+function formatEventList(events: CalendarEvent[], compact = false): string {
   if (events.length === 0) return 'No events found.';
+  if (compact) {
+    return `${events.length} events (start~end | subject | location | flags)\n${events.map(formatCompactEvent).join('\n')}`;
+  }
   return events.map((e, i) => `--- Event ${i + 1} ---\n${formatEvent(e)}`).join('\n\n');
 }
 
@@ -159,15 +187,16 @@ export function registerCalendarTools(server: McpServer): void {
       end_date: z.string().optional().describe('ISO 8601 end datetime (defaults to 7 days from now)'),
       top: z.number().int().min(1).max(100).optional().describe('Max events to return (default 50)'),
       calendar_id: z.string().optional().describe('Specific calendar ID (defaults to primary calendar)'),
+      compact: z.boolean().optional().describe('One line per event (start~end | subject | location | flags), without IDs, URLs or body previews'),
     },
-    async ({ start_date, end_date, top, calendar_id }) => {
+    async ({ start_date, end_date, top, calendar_id, compact }) => {
       const events = await listEvents({
         startDateTime: start_date,
         endDateTime: end_date,
         top: top ?? 50,
         calendarId: calendar_id,
       });
-      return { content: [{ type: 'text', text: formatEventList(events) }] };
+      return { content: [{ type: 'text', text: formatEventList(events, compact) }] };
     },
   );
 

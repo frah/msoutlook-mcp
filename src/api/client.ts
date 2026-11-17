@@ -14,7 +14,11 @@ import { getBearerHeaders, parseResponse, fetchWithRetry } from '../utils/http.j
 // OWA REST API client
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function owaGet<T>(path: string, params?: Record<string, string>): Promise<T> {
+export async function owaGet<T>(
+  path: string,
+  params?: Record<string, string>,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
   const token = await getOwaToken();
   if (!token) throw new Error('Not authenticated. Run outlook_login first.');
 
@@ -26,7 +30,7 @@ export async function owaGet<T>(path: string, params?: Record<string, string>): 
 
   const res = await fetchWithRetry(url, {
     method: 'GET',
-    headers: getBearerHeaders(token, OWA_BASE),
+    headers: { ...getBearerHeaders(token, OWA_BASE), ...extraHeaders },
   });
   return parseResponse<T>(res);
 }
